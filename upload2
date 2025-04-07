@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>패들렛 사진 업로드</title>
+</head>
+<body>
+  <h1>패들렛 사진 업로드</h1>
+  <p>아래 필드에 사진 URL을 입력한 후 업로드 버튼을 클릭하면, 해당 사진이 패들렛 게시판에 업로드 됩니다.</p>
+  
+  <div>
+    <label for="subject">제목:</label>
+    <input type="text" id="subject" value="Test post">
+  </div>
+  
+  <div>
+    <label for="body">본문:</label>
+    <input type="text" id="body" value="Created using the API!">
+  </div>
+  
+  <div>
+    <label for="attachmentUrl">사진 URL:</label>
+    <input type="text" id="attachmentUrl" value="https://padlet.net/public_api/public_api_post_image.jpeg">
+  </div>
+  
+  <button id="uploadButton">업로드</button>
+  <div id="status"></div>
+  
+  <script>
+    // API 엔드포인트와 API 키 (제공해주신 cURL 내용 반영)
+    const PADLET_API_URL = "https://api.padlet.dev/v1/boards/dv92b5rf3vy6cium/posts";
+    const API_KEY = "pdltp_03a09e2f9f16f8fcaab16cbec3bfab153bab4b641cff56ebd797b8064f9075dbe9d3ec";
+
+    document.getElementById("uploadButton").addEventListener("click", function() {
+      const subject = document.getElementById("subject").value;
+      const bodyText = document.getElementById("body").value;
+      const attachmentUrl = document.getElementById("attachmentUrl").value;
+      const statusDiv = document.getElementById("status");
+
+      // cURL 명령의 JSON 구조를 그대로 반영한 payload
+      const payload = {
+        data: {
+          type: "post",
+          attributes: {
+            content: {
+              subject: subject,
+              body: bodyText,
+              attachment: {
+                url: attachmentUrl
+              }
+            }
+          }
+        }
+      };
+
+      fetch(PADLET_API_URL, {
+        method: "POST",
+        headers: {
+          "X-Api-Key": API_KEY,
+          "accept": "application/vnd.api+json",
+          "content-type": "application/vnd.api+json"
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("업로드 실패 (상태 코드: " + response.status + ")");
+        }
+        return response.json();
+      })
+      .then(data => {
+        statusDiv.innerText = "업로드 성공!";
+        console.log("응답 데이터:", data);
+      })
+      .catch(error => {
+        statusDiv.innerText = "에러 발생: " + error.message;
+        console.error("에러:", error);
+      });
+    });
+  </script>
+</body>
+</html>
