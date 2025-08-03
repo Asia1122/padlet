@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>하트 모으기 경우의 수 게임</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; display: flex; justify-content: center; }
+    #gameContainer { display: flex; align-items: flex-start; }
+    /* 메인 그리드 */
+    #grid { display: grid; grid-template-rows: repeat(3,80px); grid-template-columns: repeat(4,80px); }
+    .cell { position: relative; border:1px dotted #888; }
+    .wall-top { border-top:4px solid #000 !important; }
+    .wall-right { border-right:4px solid #000 !important; }
+    .wall-bottom { border-bottom:4px solid #000 !important; }
+    .wall-left { border-left:4px solid #000 !important; }
+    .start-cell { background:#fff59d; }
+    .end-cell { background:#a5d6a7; }
+    .cell-number { position:absolute; top:4px; left:4px; font-size:12px; color:rgba(0,0,0,0.2); }
+    .heart { font-size:24px; line-height:80px; text-align:center; }
+    .robot { width:24px; height:24px; background:blue; border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
+    /* 컨트롤 */
+    #controls { margin-top:10px; }
+    #controls button { font-size:16px; margin:4px; padding:6px 10px; }
+    #heartControl { margin-top:10px; }
+    #heartControl label, #heartControl select { font-size:16px; margin:4px; padding:6px 10px; }
+    /* 정보 패널 */
+    #infoPanel { margin-left:30px; min-width:300px; }
+    #infoPanel h2 { margin:10px 0 4px; }
+    .path-cells { display:grid; grid-template-columns:repeat(20,28px); gap:4px; margin-bottom:8px; }
+    .path-cell { width:28px; height:28px; border:1px solid #888; display:flex; align-items:center; justify-content:center; font-size:14px; background:#fafafa; }
+    #recordList { list-style:decimal; padding-left:20px; max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:8px; background:#fdfdfd; }
+    #recordList li { margin-bottom:4px; }
+  </style>
+</head>
+<body>
+<div id="gameContainer">
+  <div>
+    <h1>하트 모으기 경우의 수</h1>
+    <div id="grid"></div>
+    <p>모은 하트: <span id="score">0</span> / 1</p>
+    <div id="controls">
+      <button id="up">↑</button>
+      <button id="left">←</button>
+      <button id="down">↓</button>
+      <button id="right">→</button>
+      <button id="reset">다시하기 (space)</button>
+    </div>
+    <div id="heartControl">
+      <label for="heartSelect">하트 위치:</label>
+      <select id="heartSelect">
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10" selected>10</option>
+        <option value="11">11</option>
+        <option value="12">12</option>
+      </select>
+    </div>
+    <p id="message" style="font-weight:bold;color:green;"></p>
+  </div>
+  <div id="infoPanel">
+    <h2>▶ 이동 경로 (방향)</h2>
+    <div id="pathCells" class="path-cells"></div>
+    <h2>▶ 이동 경로 (셀 번호)</h2>
+    <div id="pathCellNums" class="path-cells"></div>
+    <h2>▶ 이동 횟수</h2>
+    <p><span id="moveCount">0</span> 회</p>
+    <h2>▶ 베스트 기록</h2>
+    <p><span id="bestCount">-</span> 회</p>
+    <button id="sortAsc">오름차순 정렬</button>
+    <button id="sortDesc">내림차순 정렬</button>
+    <h2>▶ 게임 기록</h2>
+    <ul id="recordList"></ul>
+  </div>
+</div>
+<script>
+  const ROWS=3, COLS=4;
+  const walls=[
+    {r:2,c:0,dir:'E'},{r:2,c:1,dir:'W'},
+    {r:0,c:1,dir:'E'},{r:0,c:2,dir:'W'},
+    {r:1,c:2,dir:'S'},{r:2,c:2,dir:'N'}
+  ];
+  let hearts, robot, score, path, cellHistory;
+  let moveCount=0, bestCount=null, records=[];
+
+  const gridEl=document.getElementById('grid');
+  const heartSelect=document.getElementById('heartSelect');
+
+  function hasWall(r,c,dir){return walls.some(w=>w.r===r&&w.c===c&&w.dir===dir);}
+
+  function buildGrid(){
+    gridEl.innerHTML='';
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const cell=document.createElement('div');cell.className='cell';cell.id=`cell-${r}-${c}`;
+        if(r===0&&c===0)cell.classList.add('start-cell');
+        if(r===0&&c===3)cell.classList.add('end-cell');
+        if(r===0)cell.classList.add('wall-top');if(c===0)cell.classList.add('wall-left');
+        if(r===ROWS-1)cell.classList.add('wall-bottom');if(c===COLS-1)cell.classList.add('wall-right');
+        if(hasWall(r,c,'N'))cell.classList.add('wall-top');if(hasWall(r,c,'E'))cell.classList.add('wall-right');
+        if(hasWall(r,c,'S'))cell.classList.add('wall-bottom');if(hasWall(r,c,'W'))cell.classList.add('wall-left');
+        const num=document.createElement('div');num.className='cell-number';num.textContent=r*COLS+c+1;cell.appendChild(num);
+        gridEl.appendChild(cell);
+      }
+    }
+    hearts.forEach(h=>{const cell=document.getElementById(`cell-${h.r}-${h.c}`);const heart=document.createElement('div');heart.className='heart';heart.textContent='♥';cell.appendChild(heart);});
+  }
+
+  function renderRobot(){document.querySelectorAll('.robot').forEach(e=>e.remove());const cell=document.getElementById(`cell-${robot.r}-${robot.c}`);const rb=document.createElement('div');rb.className='robot';cell.appendChild(rb);}
+  function updateUI(){document.getElementById('moveCount').textContent=moveCount;document.getElementById('bestCount').textContent=bestCount===null?'-':bestCount;}
+
+  function renderPaths(){const dirs=document.getElementById('pathCells'),nums=document.getElementById('pathCellNums');dirs.innerHTML='';nums.innerHTML='';for(let i=0;i<20;i++){const d=document.createElement('div');d.className='path-cell';if(i<path.length)d.textContent=path[i];dirs.appendChild(d);const n=document.createElement('div');n.className='path-cell';if(i<cellHistory.length)n.textContent=cellHistory[i];nums.appendChild(n);}}
+
+  function updateRecordList(){const ul=document.getElementById('recordList');ul.innerHTML='';records.forEach(o=>{const li=document.createElement('li');li.textContent=o.path;if(o.moves===bestCount){li.style.fontWeight='bold';li.style.color='#d32f2f';}ul.appendChild(li);});}
+
+  function initState(){robot={r:0,c:0};score=0;path=[];cellHistory=[];moveCount=0;document.getElementById('message').textContent='';}
+  function resetGame(){const num=parseInt(heartSelect.value);const r=Math.floor((num-1)/4),c=(num-1)%4;hearts=[{r,c}];initState();buildGrid();renderRobot();updateUI();renderPaths();disableControls(false);}
+  heartSelect.addEventListener('change',()=>{records=[];bestCount=null;updateRecordList();resetGame();});
+  function disableControls(f){['up','down','left','right'].forEach(id=>document.getElementById(id).disabled=f);}
+  function tryCollect(){const idx=hearts.findIndex(h=>h.r===robot.r&&h.c===robot.c);if(idx!==-1){hearts.splice(idx,1);score++;buildGrid();renderRobot();}}
+  function checkWin(){if(score===1&&robot.r===0&&robot.c===3){const rec=cellHistory.join(' → ');moveCount=path.length;updateUI();if(bestCount===null||moveCount<bestCount)bestCount=moveCount;updateUI();if(!records.some(o=>o.path===rec)){records.push({path:rec,moves:moveCount});updateRecordList();}document.getElementById('message').textContent=`🎉 성공! 기록 ${moveCount}회 · 베스트 ${bestCount}회`;disableControls(true);}}
+  function move(dir){if(score===1&&robot.r===0&&robot.c===3)return;const delta={N:[-1,0],S:[1,0],W:[0,-1],E:[0,1]};const [dr,dc]=delta[dir];const nr=robot.r+dr,nc=robot.c+dc;if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!hasWall(robot.r,robot.c,dir)){robot={r:nr,c:nc};path.push({N:'↑',S:'↓',W:'←',E:'→'}[dir]);cellHistory.push(nr*COLS+nc+1);renderPaths();renderRobot();tryCollect();checkWin();}}
+
+  document.getElementById('up').onclick=()=>move('N');
+  document.getElementById('left').onclick=()=>move('W');
+  document.getElementById('down').onclick=()=>move('S');
+  document.getElementById('right').onclick=()=>move('E');
+  document.getElementById('reset').onclick=resetGame;
+  document.getElementById('sortAsc').onclick=()=>{records.sort((a,b)=>a.moves-b.moves);updateRecordList();};
+  document.getElementById('sortDesc').onclick=()=>{records.sort((a,b)=>b.moves-a.moves);updateRecordList();};
+  document.addEventListener('keydown',e=>{if(e.key==='ArrowUp')move('N');else if(e.key==='ArrowDown')move('S');else if(e.key==='ArrowLeft')move('W');else if(e.key==='ArrowRight')move('E');else if(e.key===' '||e.key==='Enter')resetGame();});
+
+  // 초기 실행
+  resetGame();
+</script>
+</body>
+</html>
